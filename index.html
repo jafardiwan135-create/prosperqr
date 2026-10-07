@@ -48,109 +48,72 @@
   </div>
 
   <script>
-    // === PASTE YOUR CREDENTIALS HERE ===
-    const SUPABASE_URL = "https://jshbvk1cvpznkrunaej.supabase.co"; // Replace if different
-    const SUPABASE_ANON_KEY = "sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ"; // Your sb_publishable_... key
+  window.onerror = function(msg, url, line) {
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('error-screen').classList.remove('hidden');
+    document.getElementById('error-screen').innerText = "JS Error: " + msg + " (Line " + line + ")";
+  };
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const qrId = urlParams.get('id');
+  const SUPABASE_URL = "https://jshbvklcvzpzmkrvnaoj.supabase.co"; 
+  const SUPABASE_ANON_KEY = "sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ"; // <-- PUT YOUR KEY HERE
 
-    async function handleQRScan() {
-      if (!qrId) {
-        showError("❌ Missing ?id= in URL. Example: ?id=qr_001");
+  const urlParams = new URLSearchParams(window.location.search);
+  const qrId = urlParams.get('id');
+
+  async function handleQRScan() {
+    if (!qrId) {
+      showError("❌ Missing ?id= in URL. Example: ?id=qr_001");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/qr_codes?id=eq.${qrId}&select=*`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        showError("❌ Supabase Error: " + (data.message || response.statusText));
         return;
       }
 
-      try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/qr_codes?id=eq.${qrId}&select=*`, {
-          headers: {
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-          }
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data || data.length === 0) {
-          showError(`❌ QR ID '${qrId}' not found in Supabase database.`);
-          return;
-        }
-
-        const qrRecord = data[0];
-
-        // Flowchart Logic
-        if (qrRecord.destination_url) {
-          window.location.href = qrRecord.destination_url;
-        } else {
-          document.getElementById('display-qr-id').innerText = qrId;
-          showScreen('setup-screen');
-        }
-      } catch (err) {
-        showError("❌ Connection error: " + err.message);
-      }
-    }
-
-    async function saveBusinessLink() {
-      const placeId = document.getElementById('place-id-input').value.trim();
-      const saveBtn = document.getElementById('save-btn');
-
-      if (!placeId) {
-        alert('Please enter a valid Place ID');
+      if (!data || data.length === 0) {
+        showError(`❌ QR ID '${qrId}' not found in Supabase database.`);
         return;
       }
 
-      saveBtn.innerText = "Saving...";
-      saveBtn.disabled = true;
+      const qrRecord = data[0];
 
-      const reviewUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
-
-      try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/qr_codes?id=eq.${qrId}`, {
-          method: "PATCH",
-          headers: {
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal"
-          },
-          body: JSON.stringify({
-            destination_url: reviewUrl,
-            place_id: placeId
-          })
-        });
-
-        if (response.ok) {
-          showScreen('success-screen');
-          setTimeout(() => {
-            window.location.href = reviewUrl;
-          }, 2000);
-        } else {
-          const errData = await response.json();
-          alert("Save failed: " + (errData.message || response.statusText));
-          saveBtn.innerText = "Save & Link QR";
-          saveBtn.disabled = false;
-        }
-      } catch (err) {
-        alert("Save failed: " + err.message);
-        saveBtn.innerText = "Save & Link QR";
-        saveBtn.disabled = false;
+      if (qrRecord.destination_url) {
+        window.location.href = qrRecord.destination_url;
+      } else {
+        document.getElementById('display-qr-id').innerText = qrId;
+        showScreen('setup-screen');
       }
+    } catch (err) {
+      showError("❌ Fetch error: " + err.message);
     }
+  }
 
-    function showScreen(screenId) {
-      document.getElementById('loading-screen').classList.add('hidden');
-      document.getElementById('setup-screen').classList.add('hidden');
-      document.getElementById('success-screen').classList.add('hidden');
-      document.getElementById('error-screen').classList.add('hidden');
-      document.getElementById(screenId).classList.remove('hidden');
-    }
+  function showScreen(screenId) {
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('success-screen').classList.add('hidden');
+    document.getElementById('error-screen').classList.add('hidden');
+    document.getElementById(screenId).classList.remove('hidden');
+  }
 
-    function showError(msg) {
-      showScreen('error-screen');
-      document.getElementById('error-screen').innerText = msg;
-    }
+  function showError(msg) {
+    showScreen('error-screen');
+    document.getElementById('error-screen').innerText = msg;
+  }
 
-    handleQRScan();
+  handleQRScan();
   </script>
+  
 </body>
 </html>
