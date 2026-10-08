@@ -8,7 +8,7 @@
   <!-- Supabase JS Library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   
-  <!-- Google Maps JS SDK (REPLACE WITH YOUR ACTUAL GOOGLE API KEY) -->
+  <!-- Google Maps JS SDK (REPLACE YOUR_GOOGLE_PLACES_API_KEY) -->
   <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_PLACES_API_KEY&libraries=places"></script>
 
   <style>
@@ -90,8 +90,8 @@
 
 <script>
   // 1. YOUR CREDENTIALS (Make sure these are completely replaced)
-  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  const SUPABASE_URL = 'https://jshbvklcvzpzmkrvnaoj.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ';
   
   let supabase = null;
   if (typeof window.supabase !== 'undefined') {
@@ -102,7 +102,7 @@
   let map = null;
   let marker = null;
 
-  // 2. EXTRACT PARAMETER ID
+  // 2. EXTRACT PARAMETER ID (e.g. ?id=LPXqyFMI)
   const urlParams = new URLSearchParams(window.location.search);
   const qrId = urlParams.get('id');
 
@@ -116,13 +116,13 @@
       }
 
       if (!supabase) {
-        loadingEl.innerHTML = `<h3>System Error</h3><p class="error-msg">Supabase JS failed to load.</p>`;
+        loadingEl.innerHTML = `<h3>System Error</h3><p class="error-msg">Supabase library failed to load.</p>`;
         return;
       }
 
-      // Fetch row from Supabase
+      // Query table: qr_codes
       const { data, error } = await supabase
-        .from('qrcodes')
+        .from('qr_codes')
         .select('*')
         .eq('id', qrId)
         .maybeSingle();
@@ -133,7 +133,7 @@
       }
 
       if (!data) {
-        loadingEl.innerHTML = `<h3>QR Code Not Found</h3><p class="error-msg">ID '${qrId}' does not exist in 'qrcodes' table.</p>`;
+        loadingEl.innerHTML = `<h3>QR Code Not Found</h3><p class="error-msg">ID '${qrId}' does not exist in 'qr_codes' table.</p>`;
         return;
       }
 
@@ -212,8 +212,9 @@
 
     const reviewUrl = `https://search.google.com/local/writereview?placeid=${selectedPlace.place_id}`;
 
+    // Update table: qr_codes
     const { error } = await supabase
-      .from('qrcodes')
+      .from('qr_codes')
       .update({
         destination_url: reviewUrl,
         place_id: selectedPlace.place_id
