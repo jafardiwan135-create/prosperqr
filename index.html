@@ -5,11 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Setup Business QR</title>
   
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #f4f5f7; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
+    body { background-color: #f4f5f7; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
     
     .card { background: #ffffff; border-radius: 20px; padding: 24px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); text-align: center; }
     .status-msg { font-size: 15px; color: #4b5563; }
@@ -18,24 +16,37 @@
     h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
     p { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.4; }
     
-    .field-group { text-align: left; margin-bottom: 14px; }
-    label { font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px; }
-    input { width: 100%; height: 48px; padding: 0 14px; font-size: 15px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; transition: border-color 0.2s; }
+    /* Search Bar */
+    .input-wrapper { position: relative; width: 100%; margin-bottom: 12px; }
+    input { width: 100%; height: 50px; padding: 0 16px; font-size: 16px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; transition: border-color 0.2s; }
     input:focus { border-color: #4f46e5; }
 
-    #preview-card { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; text-align: left; background: #f8fafc; }
-    .biz-title { font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px; }
-    .biz-address { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
+    /* Google Places Dropdown Styling */
+    .pac-container { border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.15); font-family: inherit; margin-top: 4px; padding: 4px 0; z-index: 1000; }
+    .pac-item { padding: 10px 14px; font-size: 14px; cursor: pointer; color: #334155; }
+    .pac-item:hover { background-color: #f8fafc; }
+    .pac-item-query { font-size: 14px; font-weight: 600; color: #0f172a; }
 
-    .confirm-btn { width: 100%; height: 48px; background: #059669; color: #ffffff; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; cursor: pointer; margin-top: 8px; }
+    /* Interactive Map Preview Card */
+    #business-preview { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; text-align: left; background: #ffffff; }
+    #map { width: 100%; height: 180px; background-color: #e5e7eb; }
+    .preview-info { padding: 16px; }
+    .biz-title { font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px; }
+    .biz-address { font-size: 13px; color: #6b7280; margin-bottom: 16px; line-height: 1.4; }
+
+    .confirm-btn { width: 100%; height: 48px; background: #059669; color: #ffffff; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; cursor: pointer; }
     .confirm-btn:active { background: #047857; }
 
+    /* Success Modal */
     .modal-overlay { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; padding: 20px; z-index: 999; }
     .modal-content { background: #fff; border-radius: 20px; padding: 32px 24px; text-align: center; max-width: 360px; width: 100%; }
     .checkmark-icon { font-size: 48px; margin-bottom: 12px; }
     .modal-title { font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 8px; }
     .modal-text { font-size: 14px; color: #4b5563; line-height: 1.5; }
   </style>
+
+  <!-- Supabase Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -43,25 +54,21 @@
   <div id="loading" class="status-msg">Checking QR code status...</div>
 
   <div id="setup-container" style="display: none;">
-    <h1>Link Your Business</h1>
-    <p>Enter your business name and area in Anand to connect this QR code directly to Google Reviews.</p>
+    <h1>Find Your Business</h1>
+    <p>Search your business name and city to link it to this QR code.</p>
 
-    <div class="field-group">
-      <label>Business / Shop Name</label>
-      <input id="biz-name" type="text" placeholder="e.g. Royal Bakery" autocomplete="off">
+    <div class="input-wrapper">
+      <input id="business-search" type="text" placeholder="Type business name & city..." autocomplete="off">
     </div>
 
-    <div class="field-group">
-      <label>City / Location</label>
-      <input id="biz-city" type="text" value="Anand, Gujarat" placeholder="e.g. Anand, Gujarat" autocomplete="off">
-    </div>
-
-    <button id="preview-btn" class="confirm-btn" style="background: #4f46e5;">Preview Business Link</button>
-
-    <div id="preview-card">
-      <div id="preview-title" class="biz-title"></div>
-      <div id="preview-address" class="biz-address"></div>
-      <button id="ok-btn" class="confirm-btn">Confirm & Save QR Code</button>
+    <!-- Live Google Map & Pinpoint Preview -->
+    <div id="business-preview">
+      <div id="map"></div>
+      <div class="preview-info">
+        <div id="biz-title" class="biz-title"></div>
+        <div id="biz-address" class="biz-address"></div>
+        <button id="ok-btn" class="confirm-btn">Confirm & Link Business</button>
+      </div>
     </div>
   </div>
 </div>
@@ -69,21 +76,44 @@
 <div id="success-modal" class="modal-overlay">
   <div class="modal-content">
     <div class="checkmark-icon">✅</div>
-    <div class="modal-title">QR Code Ready!</div>
-    <div class="modal-text">Your business link has been saved successfully. Future scans will go directly to your business on Google.</div>
+    <div class="modal-title">Uploaded Successfully!</div>
+    <div class="modal-text">Your business has been linked to this QR code. Future scans will go directly to your Google Review page.</div>
   </div>
 </div>
 
 <script>
-  // Add your Supabase credentials here
+  // -------------------------------------------------------------
+  // REPLACE THESE CREDENTIALS WITH YOUR ACTUAL VALUES
+  // -------------------------------------------------------------
+  const GOOGLE_API_KEY = 'AIzaSyA7yyBP6-JRy8Pth2tJb9Nx2irEUa1PM6o';
   const SUPABASE_URL = 'https://jshbvklcvzpzmkrvnaoj.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ';
-  
+  // -------------------------------------------------------------
+
   let supabaseClient = null;
-  let generatedReviewUrl = '';
+  let selectedPlace = null;
+  let googleMap = null;
+  let googleMarker = null;
 
   const urlParams = new URLSearchParams(window.location.search);
   const qrId = urlParams.get('id');
+
+  // Load Google Maps SDK dynamically with your API Key
+  function loadGoogleMapsScript() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.maps) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Google Maps SDK. Check key or billing status.'));
+      document.head.appendChild(script);
+    });
+  }
 
   async function checkQRStatus() {
     const loadingEl = document.getElementById('loading');
@@ -122,41 +152,77 @@
         return;
       }
 
+      // Load Google Maps API script
+      await loadGoogleMapsScript();
+
       loadingEl.style.display = 'none';
       document.getElementById('setup-container').style.display = 'block';
+      initGooglePlaces();
 
     } catch (err) {
-      loadingEl.innerHTML = `<h3>Error</h3><p class="error-msg">${err.message || err}</p>`;
+      loadingEl.innerHTML = `<h3>Initialization Error</h3><p class="error-msg">${err.message || err}</p>`;
     }
   }
 
-  document.getElementById('preview-btn').addEventListener('click', () => {
-    const name = document.getElementById('biz-name').value.trim();
-    const city = document.getElementById('biz-city').value.trim();
+  function initGooglePlaces() {
+    const input = document.getElementById('business-search');
+    
+    // Limits results to India
+    const autocomplete = new google.maps.places.Autocomplete(input, {
+      componentRestrictions: { country: "in" },
+      fields: ["place_id", "name", "formatted_address", "geometry"]
+    });
 
-    if (!name || !city) {
-      alert("Please enter both Business Name and City.");
-      return;
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+
+      if (!place.geometry || !place.geometry.location) {
+        alert("Please select a business from the dropdown list.");
+        return;
+      }
+
+      selectedPlace = place;
+      showGoogleMapPreview(place);
+    });
+  }
+
+  function showGoogleMapPreview(place) {
+    document.getElementById('business-preview').style.display = 'block';
+    document.getElementById('biz-title').innerText = place.name;
+    document.getElementById('biz-address').innerText = place.formatted_address;
+
+    const location = place.geometry.location;
+
+    if (!googleMap) {
+      googleMap = new google.maps.Map(document.getElementById("map"), {
+        center: location,
+        zoom: 17,
+        disableDefaultUI: true
+      });
+      googleMarker = new google.maps.Marker({
+        position: location,
+        map: googleMap
+      });
+    } else {
+      googleMap.setCenter(location);
+      googleMarker.setPosition(location);
     }
-
-    generatedReviewUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + city)}`;
-
-    document.getElementById('preview-title').innerText = name;
-    document.getElementById('preview-address').innerText = city;
-    document.getElementById('preview-card').style.display = 'block';
-  });
+  }
 
   document.getElementById('ok-btn').addEventListener('click', async () => {
-    if (!generatedReviewUrl) return;
+    if (!selectedPlace) return;
 
     const btn = document.getElementById('ok-btn');
     btn.disabled = true;
     btn.innerText = "Saving...";
 
+    // Direct Google Review link generated with official Place ID
+    const reviewUrl = `https://search.google.com/local/writereview?placeid=${selectedPlace.place_id}`;
+
     const { error } = await supabaseClient
       .from('qr_codes')
       .update({
-        destination_url: generatedReviewUrl
+        destination_url: reviewUrl
       })
       .eq('id', qrId);
 
@@ -166,7 +232,7 @@
     } else {
       alert("Failed to save: " + error.message);
       btn.disabled = false;
-      btn.innerText = "Confirm & Save QR Code";
+      btn.innerText = "Confirm & Link Business";
     }
   });
 
@@ -176,4 +242,4 @@
 </body>
 </html>
 
-   
+ 
