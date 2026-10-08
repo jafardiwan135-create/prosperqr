@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Setup Business QR</title>
   
+  <!-- Leaflet CSS for OpenStreetMap -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f5f7; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
@@ -16,18 +19,19 @@
     h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
     p { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.4; }
     
-    /* Search Bar */
     .input-wrapper { position: relative; width: 100%; margin-bottom: 12px; }
     input { width: 100%; height: 50px; padding: 0 16px; font-size: 16px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; transition: border-color 0.2s; }
     input:focus { border-color: #4f46e5; }
 
-    /* Google Places Dropdown Styling */
-    .pac-container { border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 8px 20px rgba(0,0,0,0.15); font-family: inherit; margin-top: 4px; padding: 4px 0; z-index: 1000; }
-    .pac-item { padding: 10px 14px; font-size: 14px; cursor: pointer; color: #334155; }
-    .pac-item:hover { background-color: #f8fafc; }
-    .pac-item-query { font-size: 14px; font-weight: 600; color: #0f172a; }
+    /* Custom Dropdown List */
+    .autocomplete-results { position: absolute; top: 54px; left: 0; right: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); z-index: 1000; max-height: 220px; overflow-y: auto; display: none; text-align: left; }
+    .autocomplete-item { padding: 12px 14px; font-size: 14px; border-bottom: 1px solid #f1f5f9; cursor: pointer; color: #334155; }
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover { background-color: #f8fafc; }
+    .item-title { font-weight: 600; color: #0f172a; }
+    .item-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
 
-    /* Interactive Map Preview Card */
+    /* Map Card */
     #business-preview { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; text-align: left; background: #ffffff; }
     #map { width: 100%; height: 180px; background-color: #e5e7eb; }
     .preview-info { padding: 16px; }
@@ -37,7 +41,6 @@
     .confirm-btn { width: 100%; height: 48px; background: #059669; color: #ffffff; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; cursor: pointer; }
     .confirm-btn:active { background: #047857; }
 
-    /* Success Modal */
     .modal-overlay { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; padding: 20px; z-index: 999; }
     .modal-content { background: #fff; border-radius: 20px; padding: 32px 24px; text-align: center; max-width: 360px; width: 100%; }
     .checkmark-icon { font-size: 48px; margin-bottom: 12px; }
@@ -45,7 +48,9 @@
     .modal-text { font-size: 14px; color: #4b5563; line-height: 1.5; }
   </style>
 
-  <!-- Supabase Library -->
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -59,9 +64,9 @@
 
     <div class="input-wrapper">
       <input id="business-search" type="text" placeholder="Type business name & city..." autocomplete="off">
+      <div id="autocomplete-list" class="autocomplete-results"></div>
     </div>
 
-    <!-- Live Google Map & Pinpoint Preview -->
     <div id="business-preview">
       <div id="map"></div>
       <div class="preview-info">
@@ -82,38 +87,16 @@
 </div>
 
 <script>
-  // -------------------------------------------------------------
-  // REPLACE THESE CREDENTIALS WITH YOUR ACTUAL VALUES
-  // -------------------------------------------------------------
-  const GOOGLE_API_KEY = 'AIzaSyA7yyBP6-JRy8Pth2tJb9Nx2irEUa1PM6o';
   const SUPABASE_URL = 'https://jshbvklcvzpzmkrvnaoj.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ';
-  // -------------------------------------------------------------
-
+  
   let supabaseClient = null;
   let selectedPlace = null;
-  let googleMap = null;
-  let googleMarker = null;
+  let leafletMap = null;
+  let leafletMarker = null;
 
   const urlParams = new URLSearchParams(window.location.search);
   const qrId = urlParams.get('id');
-
-  // Load Google Maps SDK dynamically with your API Key
-  function loadGoogleMapsScript() {
-    return new Promise((resolve, reject) => {
-      if (window.google && window.google.maps) {
-        resolve();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Google Maps SDK. Check key or billing status.'));
-      document.head.appendChild(script);
-    });
-  }
 
   async function checkQRStatus() {
     const loadingEl = document.getElementById('loading');
@@ -152,61 +135,90 @@
         return;
       }
 
-      // Load Google Maps API script
-      await loadGoogleMapsScript();
-
       loadingEl.style.display = 'none';
       document.getElementById('setup-container').style.display = 'block';
-      initGooglePlaces();
+      initSearchAutocomplete();
 
     } catch (err) {
       loadingEl.innerHTML = `<h3>Initialization Error</h3><p class="error-msg">${err.message || err}</p>`;
     }
   }
 
-  function initGooglePlaces() {
+  function initSearchAutocomplete() {
     const input = document.getElementById('business-search');
-    
-    // Limits results to India
-    const autocomplete = new google.maps.places.Autocomplete(input, {
-      componentRestrictions: { country: "in" },
-      fields: ["place_id", "name", "formatted_address", "geometry"]
-    });
+    const resultsContainer = document.getElementById('autocomplete-list');
+    let debounceTimer;
 
-    autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
+    input.addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      clearTimeout(debounceTimer);
 
-      if (!place.geometry || !place.geometry.location) {
-        alert("Please select a business from the dropdown list.");
+      if (query.length < 2) {
+        resultsContainer.style.display = 'none';
         return;
       }
 
-      selectedPlace = place;
-      showGoogleMapPreview(place);
+      debounceTimer = setTimeout(() => {
+        // Photon API OpenStreetMap search
+        fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`)
+          .then(res => res.json())
+          .then(data => {
+            resultsContainer.innerHTML = '';
+            if (!data.features || data.features.length === 0) {
+              resultsContainer.style.display = 'none';
+              return;
+            }
+
+            data.features.forEach(feature => {
+              const name = feature.properties.name || query;
+              const city = feature.properties.city || feature.properties.state || feature.properties.country || '';
+              const address = [feature.properties.street, city].filter(Boolean).join(', ');
+
+              const item = document.createElement('div');
+              item.className = 'autocomplete-item';
+              item.innerHTML = `<div class="item-title">${name}</div><div class="item-sub">${address}</div>`;
+
+              item.addEventListener('click', () => {
+                input.value = name;
+                resultsContainer.style.display = 'none';
+                selectedPlace = {
+                  name: name,
+                  address: address,
+                  lat: feature.geometry.coordinates[1],
+                  lng: feature.geometry.coordinates[0]
+                };
+                showMapPreview(selectedPlace);
+              });
+
+              resultsContainer.appendChild(item);
+            });
+
+            resultsContainer.style.display = 'block';
+          })
+          .catch(() => {
+            resultsContainer.style.display = 'none';
+          });
+      }, 300);
     });
   }
 
-  function showGoogleMapPreview(place) {
+  function showMapPreview(place) {
     document.getElementById('business-preview').style.display = 'block';
     document.getElementById('biz-title').innerText = place.name;
-    document.getElementById('biz-address').innerText = place.formatted_address;
+    document.getElementById('biz-address').innerText = place.address || 'Selected Location';
 
-    const location = place.geometry.location;
-
-    if (!googleMap) {
-      googleMap = new google.maps.Map(document.getElementById("map"), {
-        center: location,
-        zoom: 17,
-        disableDefaultUI: true
-      });
-      googleMarker = new google.maps.Marker({
-        position: location,
-        map: googleMap
-      });
+    if (!leafletMap) {
+      leafletMap = L.map('map').setView([place.lat, place.lng], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(leafletMap);
+      leafletMarker = L.marker([place.lat, place.lng]).addTo(leafletMap);
     } else {
-      googleMap.setCenter(location);
-      googleMarker.setPosition(location);
+      leafletMap.setView([place.lat, place.lng], 16);
+      leafletMarker.setLatLng([place.lat, place.lng]);
     }
+
+    setTimeout(() => { leafletMap.invalidateSize(); }, 200);
   }
 
   document.getElementById('ok-btn').addEventListener('click', async () => {
@@ -216,13 +228,12 @@
     btn.disabled = true;
     btn.innerText = "Saving...";
 
-    // Direct Google Review link generated with official Place ID
-    const reviewUrl = `https://search.google.com/local/writereview?placeid=${selectedPlace.place_id}`;
+    const googleSearchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedPlace.name + ' ' + selectedPlace.address)}`;
 
     const { error } = await supabaseClient
       .from('qr_codes')
       .update({
-        destination_url: reviewUrl
+        destination_url: googleSearchUrl
       })
       .eq('id', qrId);
 
@@ -242,4 +253,5 @@
 </body>
 </html>
 
- 
+
+  
