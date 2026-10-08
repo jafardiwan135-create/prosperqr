@@ -7,10 +7,6 @@
   
   <!-- Supabase JS Library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  
-  <!-- Leaflet OpenStreetMap CSS & JS (100% Free Maps) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -33,10 +29,8 @@
     .suggestion-item:last-child { border-bottom: none; }
     .suggestion-item:active { background-color: #f8fafc; }
 
-    /* Business Preview Card & Map */
-    #business-preview { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; text-align: left; background: #fafafa; }
-    #map { width: 100%; height: 160px; background-color: #e5e7eb; }
-    .preview-info { padding: 16px; }
+    /* Business Preview Card */
+    #business-preview { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; text-align: left; background: #fafafa; }
     .biz-title { font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px; }
     .biz-address { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
 
@@ -70,14 +64,11 @@
       <div id="suggestions-list"></div>
     </div>
 
-    <!-- Map & Preview Container -->
+    <!-- Preview Container -->
     <div id="business-preview">
-      <div id="map"></div>
-      <div class="preview-info">
-        <div id="biz-title" class="biz-title"></div>
-        <div id="biz-address" class="biz-address"></div>
-        <button id="ok-btn" class="confirm-btn">Confirm & Link Business</button>
-      </div>
+      <div id="biz-title" class="biz-title"></div>
+      <div id="biz-address" class="biz-address"></div>
+      <button id="ok-btn" class="confirm-btn">Confirm & Link Business</button>
     </div>
   </div>
 </div>
@@ -97,13 +88,8 @@
   const SUPABASE_ANON_KEY = 'sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ';
   
   let supabase = null;
-  if (typeof window.supabase !== 'undefined') {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
 
   let selectedPlace = null;
-  let leafletMap = null;
-  let leafletMarker = null;
   let debounceTimer = null;
 
   // 2. EXTRACT PARAMETER ID
@@ -114,13 +100,15 @@
     const loadingEl = document.getElementById('loading');
 
     try {
-      if (!qrId) {
-        loadingEl.innerHTML = `<h3>Invalid QR Code</h3><p class="error-msg">Missing '?id=' parameter in link.</p>`;
+      if (typeof window.supabase === 'undefined') {
+        loadingEl.innerHTML = `<h3>System Error</h3><p class="error-msg">Supabase library CDN failed to load. Check internet connection.</p>`;
         return;
       }
 
-      if (!supabase) {
-        loadingEl.innerHTML = `<h3>System Error</h3><p class="error-msg">Supabase library failed to load.</p>`;
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      if (!qrId) {
+        loadingEl.innerHTML = `<h3>Invalid QR Code</h3><p class="error-msg">Missing '?id=' parameter in link.</p>`;
         return;
       }
 
@@ -157,7 +145,7 @@
     }
   }
 
-  // 3. FREE SEARCH AUTOCOMPLETE (OpenStreetMap / LocationIQ)
+  // 3. FREE SEARCH AUTOCOMPLETE
   function setupAutocomplete() {
     const input = document.getElementById('business-search');
     const suggestionsList = document.getElementById('suggestions-list');
@@ -171,7 +159,6 @@
         return;
       }
 
-      // Debounce search requests
       debounceTimer = setTimeout(async () => {
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
@@ -213,33 +200,19 @@
     });
   }
 
-  // 4. DISPLAY MAP & DETAILS
+  // 4. DISPLAY DETAILS
   function showBusinessPreview(place, name) {
     selectedPlace = {
       name: name,
-      address: place.display_name,
-      lat: parseFloat(place.lat),
-      lon: parseFloat(place.lon)
+      address: place.display_name
     };
 
     document.getElementById('business-preview').style.display = 'block';
     document.getElementById('biz-title').innerText = name;
     document.getElementById('biz-address').innerText = place.display_name;
-
-    // Render Free OpenStreetMap
-    if (!leafletMap) {
-      leafletMap = L.map('map').setView([selectedPlace.lat, selectedPlace.lon], 15);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-      }).addTo(leafletMap);
-      leafletMarker = L.marker([selectedPlace.lat, selectedPlace.lon]).addTo(leafletMap);
-    } else {
-      leafletMap.setView([selectedPlace.lat, selectedPlace.lon], 15);
-      leafletMarker.setLatLng([selectedPlace.lat, selectedPlace.lon]);
-    }
   }
 
-  // 5. CONFIRM & SAVE DIRECT GOOGLE REVIEW LINK TO SUPABASE
+  // 5. CONFIRM & SAVE LINK TO SUPABASE
   document.getElementById('ok-btn').addEventListener('click', async () => {
     if (!selectedPlace) return;
 
@@ -247,10 +220,8 @@
     btn.disabled = true;
     btn.innerText = "Saving...";
 
-    // Direct Google Maps Review Search Link format
     const reviewUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedPlace.name + ' ' + selectedPlace.address)}`;
 
-    // Update Supabase
     const { error } = await supabase
       .from('qr_codes')
       .update({
