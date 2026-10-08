@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Setup Business QR</title>
   
-  <!-- Supabase JS Library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -19,13 +18,11 @@
     h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
     p { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.4; }
     
-    /* Inputs */
     .field-group { text-align: left; margin-bottom: 14px; }
     label { font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px; }
     input { width: 100%; height: 48px; padding: 0 14px; font-size: 15px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; transition: border-color 0.2s; }
     input:focus { border-color: #4f46e5; }
 
-    /* Preview Box */
     #preview-card { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; text-align: left; background: #f8fafc; }
     .biz-title { font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px; }
     .biz-address { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
@@ -33,7 +30,6 @@
     .confirm-btn { width: 100%; height: 48px; background: #059669; color: #ffffff; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; cursor: pointer; margin-top: 8px; }
     .confirm-btn:active { background: #047857; }
 
-    /* Modal */
     .modal-overlay { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; padding: 20px; z-index: 999; }
     .modal-content { background: #fff; border-radius: 20px; padding: 32px 24px; text-align: center; max-width: 360px; width: 100%; }
     .checkmark-icon { font-size: 48px; margin-bottom: 12px; }
@@ -48,7 +44,7 @@
 
   <div id="setup-container" style="display: none;">
     <h1>Link Your Business</h1>
-    <p>Enter your business name and area/city in Anand to connect this QR code directly to Google Reviews.</p>
+    <p>Enter your business name and area in Anand to connect this QR code directly to Google Reviews.</p>
 
     <div class="field-group">
       <label>Business / Shop Name</label>
@@ -79,7 +75,7 @@
 </div>
 
 <script>
-  // Insert your Supabase details below
+  // Add your Supabase credentials here
   const SUPABASE_URL = 'https://jshbvklcvzpzmkrvnaoj.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ';
   
@@ -121,7 +117,6 @@
         return;
       }
 
-      // If already linked, redirect directly
       if (data.destination_url) {
         window.location.href = data.destination_url;
         return;
@@ -135,7 +130,6 @@
     }
   }
 
-  // Handle Preview
   document.getElementById('preview-btn').addEventListener('click', () => {
     const name = document.getElementById('biz-name').value.trim();
     const city = document.getElementById('biz-city').value.trim();
@@ -152,7 +146,6 @@
     document.getElementById('preview-card').style.display = 'block';
   });
 
-  // Handle Save
   document.getElementById('ok-btn').addEventListener('click', async () => {
     if (!generatedReviewUrl) return;
 
