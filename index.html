@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Setup Business QR</title>
   
+  <!-- Leaflet OpenStreetMap CSS & JS (100% Free Maps) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Supabase JS Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f5f7; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
@@ -22,18 +29,27 @@
     h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
     p { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.4; }
     
+    /* Input & Suggestions */
     .input-wrapper { position: relative; width: 100%; margin-bottom: 12px; }
-    input { width: 100%; height: 50px; padding: 0 16px; font-size: 16px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; }
+    input { width: 100%; height: 50px; padding: 0 16px; font-size: 16px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none; transition: border-color 0.2s; }
+    input:focus { border-color: #4f46e5; }
 
-    #suggestions-list { position: absolute; width: 100%; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); max-height: 200px; overflow-y: auto; z-index: 1000; text-align: left; display: none; margin-top: 4px; }
+    #suggestions-list { position: absolute; width: 100%; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); max-height: 220px; overflow-y: auto; z-index: 1000; text-align: left; display: none; margin-top: 4px; }
     .suggestion-item { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #f1f5f9; cursor: pointer; color: #334155; }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:active { background-color: #f8fafc; }
 
-    #business-preview { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; text-align: left; background: #fafafa; }
+    /* Map & Preview */
+    #business-preview { display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; text-align: left; background: #fafafa; }
+    #map { width: 100%; height: 160px; background-color: #e5e7eb; }
+    .preview-info { padding: 16px; }
     .biz-title { font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px; }
     .biz-address { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
 
     .confirm-btn { width: 100%; height: 48px; background: #059669; color: #ffffff; font-size: 16px; font-weight: 600; border: none; border-radius: 10px; cursor: pointer; }
+    .confirm-btn:active { background: #047857; }
 
+    /* Modal */
     .modal-overlay { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; padding: 20px; z-index: 999; }
     .modal-content { background: #fff; border-radius: 20px; padding: 32px 24px; text-align: center; max-width: 360px; width: 100%; }
     .checkmark-icon { font-size: 48px; margin-bottom: 12px; }
@@ -51,9 +67,6 @@
       return false;
     };
   </script>
-
-  <!-- Supabase JS Library -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -71,10 +84,14 @@
       <div id="suggestions-list"></div>
     </div>
 
+    <!-- Map and Preview Container -->
     <div id="business-preview">
-      <div id="biz-title" class="biz-title"></div>
-      <div id="biz-address" class="biz-address"></div>
-      <button id="ok-btn" class="confirm-btn">Confirm & Link Business</button>
+      <div id="map"></div>
+      <div class="preview-info">
+        <div id="biz-title" class="biz-title"></div>
+        <div id="biz-address" class="biz-address"></div>
+        <button id="ok-btn" class="confirm-btn">Confirm & Link Business</button>
+      </div>
     </div>
   </div>
 </div>
@@ -88,12 +105,14 @@
 </div>
 
 <script>
-  // Insert your credentials below
+  // Insert your credentials
   const SUPABASE_URL = 'https://jshbvklcvzpzmkrvnaoj.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_6i2KNjaLhcasDx4lu-xa0w_dh-iqyxQ';
   
   let supabaseClient = null;
   let selectedPlace = null;
+  let leafletMap = null;
+  let leafletMarker = null;
   let debounceTimer = null;
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -108,7 +127,6 @@
         return;
       }
 
-      // Initialized as supabaseClient to avoid name collision
       supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       if (!qrId) {
@@ -161,7 +179,8 @@
 
       debounceTimer = setTimeout(async () => {
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
+          // Explicitly restricted to countrycodes=in (India)
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&limit=5&addressdetails=1`);
           const results = await res.json();
 
           suggestionsList.innerHTML = '';
@@ -203,12 +222,28 @@
   function showBusinessPreview(place, name) {
     selectedPlace = {
       name: name,
-      address: place.display_name
+      address: place.display_name,
+      lat: parseFloat(place.lat),
+      lon: parseFloat(place.lon)
     };
 
     document.getElementById('business-preview').style.display = 'block';
     document.getElementById('biz-title').innerText = name;
     document.getElementById('biz-address').innerText = place.display_name;
+
+    // Render interactive Leaflet map
+    if (!leafletMap) {
+      leafletMap = L.map('map').setView([selectedPlace.lat, selectedPlace.lon], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(leafletMap);
+      leafletMarker = L.marker([selectedPlace.lat, selectedPlace.lon]).addTo(leafletMap);
+    } else {
+      leafletMap.setView([selectedPlace.lat, selectedPlace.lon], 15);
+      leafletMarker.setLatLng([selectedPlace.lat, selectedPlace.lon]);
+    }
+    
+    setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 200);
   }
 
   document.getElementById('ok-btn').addEventListener('click', async () => {
